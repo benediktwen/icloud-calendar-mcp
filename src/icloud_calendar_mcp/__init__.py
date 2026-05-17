@@ -16,7 +16,7 @@ from icloud_calendar_mcp.github_oauth_provider import GitHubOAuthProvider
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SERVER_URL = os.getenv("SERVER_URL", "https://icloud-calendar-mcp.onrender.com")
+SERVER_URL = os.getenv("SERVER_URL", "https://icloud-calendar-mcp-ijmw.onrender.com")
 
 
 def _build_app() -> tuple[FastMCP, GitHubOAuthProvider]:
