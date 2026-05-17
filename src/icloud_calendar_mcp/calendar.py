@@ -1,9 +1,10 @@
 import logging
 import uuid
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
 
 import caldav
-from icalendar import Calendar, Event, vText
+from icalendar import Calendar as iCal
+from icalendar import Calendar, Event
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,6 @@ def _make_client(username: str, password: str) -> caldav.DAVClient:
 
 
 def _parse_dt(value) -> str:
-    """Return an ISO-8601 string from a caldav dt property value."""
     if value is None:
         return ""
     if isinstance(value, datetime):
@@ -25,16 +25,24 @@ def _parse_dt(value) -> str:
     return str(value)
 
 
-def _event_to_dict(vevent) -> dict:
-    comp = vevent.instance.vevent if hasattr(vevent, "instance") else vevent
-    return {
-        "uid":         str(comp.get("uid", "")),
-        "title":       str(comp.get("summary", "")),
-        "start":       _parse_dt(getattr(comp.get("dtstart"), "dt", None)),
-        "end":         _parse_dt(getattr(comp.get("dtend"), "dt", None)),
-        "description": str(comp.get("description", "")),
-        "location":    str(comp.get("location", "")),
-    }
+def _event_to_dict(event) -> dict:
+    """Parse a caldav Event into a plain dict using the icalendar library."""
+    try:
+        cal = iCal.from_ical(event.data)
+        for comp in cal.walk("VEVENT"):
+            dtstart = comp.get("DTSTART")
+            dtend   = comp.get("DTEND")
+            return {
+                "uid":         str(comp.get("UID", "")),
+                "title":       str(comp.get("SUMMARY", "")),
+                "start":       _parse_dt(dtstart.dt if dtstart else None),
+                "end":         _parse_dt(dtend.dt if dtend else None),
+                "description": str(comp.get("DESCRIPTION", "")),
+                "location":    str(comp.get("LOCATION", "")),
+            }
+    except Exception as exc:
+        logger.warning("Could not parse event: %s", exc)
+    return {}
 
 
 def _build_ical(title: str, start: datetime, end: datetime,
@@ -58,6 +66,25 @@ def _build_ical(title: str, start: datetime, end: datetime,
     return cal.to_ical()
 
 
+def _find_calendar(all_calendars: list, name: str) -> tuple:
+    """
+    Return (calendar, error_string). Tries exact match then case-insensitive.
+    On failure, returns (None, message listing available names).
+    """
+    by_name = {str(c.name): c for c in all_calendars}
+
+    if name in by_name:
+        return by_name[name], None
+
+    name_lower = name.lower()
+    for cal_name, cal in by_name.items():
+        if cal_name.lower() == name_lower:
+            return cal, None
+
+    available = list(by_name.keys())
+    return None, f"Calendar '{name}' not found. Available calendars: {available}"
+
+
 def register_tools(mcp, username: str, password: str) -> None:
 
     @mcp.tool()
@@ -76,21 +103,21 @@ def register_tools(mcp, username: str, password: str) -> None:
         List events in a calendar within a date range.
 
         Args:
-            calendar_name: Exact calendar name (from list_calendars).
-            start_date: ISO date string, e.g. '2026-05-01'.
-            end_date:   ISO date string, e.g. '2026-05-31'.
+            calendar_name: Calendar name (from list_calendars). Case-insensitive.
+            start_date:    ISO date string, e.g. '2026-05-01'.
+            end_date:      ISO date string, e.g. '2026-05-31'.
         """
         client = _make_client(username, password)
         principal = client.principal()
-        calendars = {str(c.name): c for c in principal.calendars()}
-        cal = calendars.get(calendar_name)
-        if cal is None:
-            return [{"error": f"Calendar '{calendar_name}' not found."}]
+        cal, err = _find_calendar(principal.calendars(), calendar_name)
+        if err:
+            return [{"error": err}]
 
-        start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        end   = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
-        events = cal.date_search(start=start, end=end, expand=True)
-        return [_event_to_dict(e) for e in events]
+        start  = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        end    = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        # expand=False: iCloud CalDAV does not support server-side expansion
+        events = cal.date_search(start=start, end=end, expand=False)
+        return [d for d in (_event_to_dict(e) for e in events) if d]
 
     @mcp.tool()
     def get_event(calendar_name: str, event_uid: str) -> dict:
@@ -98,15 +125,14 @@ def register_tools(mcp, username: str, password: str) -> None:
         Get a single event by UID.
 
         Args:
-            calendar_name: Exact calendar name.
+            calendar_name: Calendar name (from list_calendars). Case-insensitive.
             event_uid:     UID string from list_events or search_events.
         """
         client = _make_client(username, password)
         principal = client.principal()
-        calendars = {str(c.name): c for c in principal.calendars()}
-        cal = calendars.get(calendar_name)
-        if cal is None:
-            return {"error": f"Calendar '{calendar_name}' not found."}
+        cal, err = _find_calendar(principal.calendars(), calendar_name)
+        if err:
+            return {"error": err}
         try:
             event = cal.event_by_uid(event_uid)
             return _event_to_dict(event)
@@ -126,7 +152,7 @@ def register_tools(mcp, username: str, password: str) -> None:
         Create a new calendar event.
 
         Args:
-            calendar_name: Exact calendar name.
+            calendar_name: Calendar name (from list_calendars). Case-insensitive.
             title:         Event title/summary.
             start:         ISO datetime string, e.g. '2026-05-20T10:00:00'.
             end:           ISO datetime string, e.g. '2026-05-20T11:00:00'.
@@ -135,14 +161,13 @@ def register_tools(mcp, username: str, password: str) -> None:
         """
         client = _make_client(username, password)
         principal = client.principal()
-        calendars = {str(c.name): c for c in principal.calendars()}
-        cal = calendars.get(calendar_name)
-        if cal is None:
-            return {"error": f"Calendar '{calendar_name}' not found."}
+        cal, err = _find_calendar(principal.calendars(), calendar_name)
+        if err:
+            return {"error": err}
 
-        uid       = str(uuid.uuid4())
-        start_dt  = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
-        end_dt    = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+        uid      = str(uuid.uuid4())
+        start_dt = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
+        end_dt   = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
         ical_data = _build_ical(title, start_dt, end_dt, description, location, uid)
 
         try:
@@ -165,7 +190,7 @@ def register_tools(mcp, username: str, password: str) -> None:
         Update an existing calendar event. Only provided fields are changed.
 
         Args:
-            calendar_name: Exact calendar name.
+            calendar_name: Calendar name (from list_calendars). Case-insensitive.
             event_uid:     UID of the event to update.
             title:         New title (optional).
             start:         New start ISO datetime (optional).
@@ -175,10 +200,9 @@ def register_tools(mcp, username: str, password: str) -> None:
         """
         client = _make_client(username, password)
         principal = client.principal()
-        calendars = {str(c.name): c for c in principal.calendars()}
-        cal = calendars.get(calendar_name)
-        if cal is None:
-            return {"error": f"Calendar '{calendar_name}' not found."}
+        cal, err = _find_calendar(principal.calendars(), calendar_name)
+        if err:
+            return {"error": err}
 
         try:
             event = cal.event_by_uid(event_uid)
@@ -187,7 +211,7 @@ def register_tools(mcp, username: str, password: str) -> None:
 
         vevent = event.instance.vevent
         if title is not None:
-            vevent.summary.obj = title
+            vevent.summary.value = title
         if start is not None:
             vevent.dtstart.value = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
         if end is not None:
@@ -196,12 +220,12 @@ def register_tools(mcp, username: str, password: str) -> None:
             if hasattr(vevent, "description"):
                 vevent.description.value = description
             else:
-                vevent.add("description", description)
+                vevent.add("description").value = description
         if location is not None:
             if hasattr(vevent, "location"):
                 vevent.location.value = location
             else:
-                vevent.add("location", location)
+                vevent.add("location").value = location
 
         try:
             event.save()
@@ -215,15 +239,14 @@ def register_tools(mcp, username: str, password: str) -> None:
         Delete a calendar event by UID.
 
         Args:
-            calendar_name: Exact calendar name.
+            calendar_name: Calendar name (from list_calendars). Case-insensitive.
             event_uid:     UID of the event to delete.
         """
         client = _make_client(username, password)
         principal = client.principal()
-        calendars = {str(c.name): c for c in principal.calendars()}
-        cal = calendars.get(calendar_name)
-        if cal is None:
-            return {"error": f"Calendar '{calendar_name}' not found."}
+        cal, err = _find_calendar(principal.calendars(), calendar_name)
+        if err:
+            return {"error": err}
 
         try:
             event = cal.event_by_uid(event_uid)
@@ -244,16 +267,19 @@ def register_tools(mcp, username: str, password: str) -> None:
         """
         client = _make_client(username, password)
         principal = client.principal()
-        start  = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        end    = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
-        q      = query.lower()
+        start   = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        end     = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        q       = query.lower()
         results = []
 
         for cal in principal.calendars():
             try:
-                events = cal.date_search(start=start, end=end, expand=True)
+                # expand=False: iCloud CalDAV does not support server-side expansion
+                events = cal.date_search(start=start, end=end, expand=False)
                 for e in events:
                     d = _event_to_dict(e)
+                    if not d:
+                        continue
                     if (q in d["title"].lower()
                             or q in d["description"].lower()
                             or q in d["location"].lower()):

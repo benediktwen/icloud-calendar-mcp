@@ -12,13 +12,15 @@ Hosted on Render, secured with GitHub OAuth (only your GitHub account can authen
 
 | Tool | Description |
 |---|---|
-| `list_calendars` | List all calendars in the iCloud account |
+| `list_calendars` | List all calendars in the iCloud account (use this first to get exact names) |
 | `list_events` | List events in a calendar within a date range |
 | `get_event` | Get a single event by UID |
 | `create_event` | Create a new calendar event |
 | `update_event` | Update an existing event (partial updates supported) |
 | `delete_event` | Delete an event by UID |
 | `search_events` | Full-text search across all calendars |
+
+> **Tip:** Always call `list_calendars` first. Calendar names are matched case-insensitively, and if a name doesn't match, the error message will show all available calendar names.
 
 ---
 
@@ -31,7 +33,7 @@ iCloud requires an app-specific password — you cannot use your main Apple ID p
 1. Go to [appleid.apple.com](https://appleid.apple.com)
 2. Sign in → **Sign-In and Security** → **App-Specific Passwords**
 3. Click **+** and label it `icloud-calendar-mcp`
-4. Copy the generated password (you'll need it in step 3)
+4. Copy the generated password (format: `xxxx-xxxx-xxxx-xxxx`)
 
 ### 2. Create a GitHub OAuth App
 
@@ -77,6 +79,22 @@ Run `/mcp` in Claude Code and add a new server, or add it directly to your MCP c
 ```
 
 On first use, Claude will open a browser window to complete the GitHub OAuth login.
+
+---
+
+## Troubleshooting
+
+**"Calendar not found" error**
+Call `list_calendars` first to see the exact names iCloud returns. The tool matches case-insensitively and will list available names in the error message.
+
+**Server slow to respond (first request)**
+Render's free tier spins down after inactivity. The first request after a period of no use can take 30–60 seconds while the container restarts. Subsequent requests are fast.
+
+**Token lost after restart**
+Configure Upstash Redis in your environment variables. Without it, tokens are stored in memory and lost on every cold start, requiring re-authentication.
+
+**Events not showing up**
+iCloud CalDAV does not support server-side expansion of recurring events. The server fetches events without expansion — recurring events will appear as a single entry with their original recurrence rules, not as individual expanded occurrences.
 
 ---
 
