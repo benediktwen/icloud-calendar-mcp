@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import caldav
 from icalendar import Calendar as iCal
@@ -66,6 +66,21 @@ def _build_ical(title: str, start: datetime, end: datetime,
     return cal.to_ical()
 
 
+def _parse_date_range(start_date: str, end_date: str) -> tuple:
+    """
+    Convert ISO date strings to UTC datetimes for CalDAV date_search.
+    When end_date is a date-only string (no 'T'), extend by one day so the
+    range is [start 00:00Z, end+1 00:00Z) and covers the full end calendar day
+    regardless of the event's stored timezone offset.
+    """
+    start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+    end_naive = datetime.fromisoformat(end_date)
+    if "T" not in end_date:
+        end_naive += timedelta(days=1)
+    end = end_naive.replace(tzinfo=timezone.utc)
+    return start, end
+
+
 def _find_calendar(all_calendars: list, name: str) -> tuple:
     """
     Return (calendar, error_string). Tries exact match then case-insensitive.
@@ -113,8 +128,7 @@ def register_tools(mcp, username: str, password: str) -> None:
         if err:
             return [{"error": err}]
 
-        start  = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        end    = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        start, end = _parse_date_range(start_date, end_date)
         # expand=False: iCloud CalDAV does not support server-side expansion
         events = cal.date_search(start=start, end=end, expand=False)
         return [d for d in (_event_to_dict(e) for e in events) if d]
@@ -267,9 +281,8 @@ def register_tools(mcp, username: str, password: str) -> None:
         """
         client = _make_client(username, password)
         principal = client.principal()
-        start   = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        end     = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
-        q       = query.lower()
+        start, end = _parse_date_range(start_date, end_date)
+        q          = query.lower()
         results = []
 
         for cal in principal.calendars():
