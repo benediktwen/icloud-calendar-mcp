@@ -16,7 +16,7 @@ from icloud_calendar_mcp.github_oauth_provider import GitHubOAuthProvider
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SERVER_URL = os.getenv("SERVER_URL", "https://icloud-calendar-mcp-ijmw.onrender.com")
+SERVER_URL = os.getenv("SERVER_URL", "")
 
 
 def _build_app() -> tuple[FastMCP, GitHubOAuthProvider]:
@@ -25,6 +25,10 @@ def _build_app() -> tuple[FastMCP, GitHubOAuthProvider]:
 
     if not github_client_id or not github_client_secret:
         logger.error("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set.")
+        sys.exit(1)
+
+    if not SERVER_URL:
+        logger.error("SERVER_URL must be set to the public base URL of this service.")
         sys.exit(1)
 
     oauth_provider = GitHubOAuthProvider(
@@ -91,7 +95,7 @@ def main() -> None:
 
     logger.info(
         "GitHub OAuth active — only '%s' can authenticate.",
-        os.getenv("GITHUB_ALLOWED_USER", "benediktwen"),
+        os.getenv("GITHUB_ALLOWED_USER", "(not configured)"),
     )
     logger.info("iCloud CalDAV user: %s", username)
     anyio.run(_serve, mcp_app)
