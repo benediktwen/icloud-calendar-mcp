@@ -123,3 +123,7 @@ The hosting platform may sleep the container after inactivity. The first request
 - **Token lifetime:** 30-day access token, 30-day refresh token (rotated on each refresh)
 - **Token persistence:** Redis-compatible store — tokens survive container restarts
 - **Calendar API:** Apple CalDAV at `caldav.icloud.com` using Apple ID + app-specific password
+
+## Credits
+
+Built with [Claude Code](https://claude.ai/code).
