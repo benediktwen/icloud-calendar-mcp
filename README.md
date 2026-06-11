@@ -123,6 +123,10 @@ The hosting platform may sleep the container after inactivity. The first request
 - **Token persistence:** Redis-compatible store — tokens survive container restarts
 - **Calendar API:** Apple CalDAV at `caldav.icloud.com` using Apple ID + app-specific password
 
+## Contributing
+
+This code was built with AI assistance ([Claude Code](https://claude.ai/code)) — vibe-coded with the best intentions. Security has been a priority throughout, but the code has not been independently audited. Use it at your own risk. If you spot a bug, a vulnerability, or an opportunity to improve anything, issues and pull requests are very welcome.
+
 ## Credits
 
 Built with [Claude Code](https://claude.ai/code).
