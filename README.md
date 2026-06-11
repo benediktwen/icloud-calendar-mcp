@@ -1,17 +1,10 @@
 # iCloud Calendar MCP
 
-Remote MCP server for Apple iCloud Calendar via CalDAV. Connects Claude to your
-Apple Calendar over the internet — no local server required.
+Remote MCP server for Apple iCloud Calendar via CalDAV. Gives AI assistants access to your iCloud Calendar over the internet — no local server or app required.
 
 ## What it does
 
-Exposes 7 calendar tools via MCP so Claude can manage your iCloud Calendar directly:
-
-- **Read:** list calendars, list events by date range, get a single event by UID
-- **Write:** create, update, and delete events
-- **Search:** full-text search across all calendars by title, description, or location
-
-## Available tools
+Exposes 7 calendar tools so AI assistants can manage your iCloud Calendar directly:
 
 | Tool | Description |
 |---|---|
@@ -21,7 +14,7 @@ Exposes 7 calendar tools via MCP so Claude can manage your iCloud Calendar direc
 | `create_event` | Create a new calendar event |
 | `update_event` | Update an existing event (partial updates supported) |
 | `delete_event` | Delete an event by UID |
-| `search_events` | Full-text search across all calendars |
+| `search_events` | Full-text search across all calendars by title, description, or location |
 
 > **Tip:** Always call `list_calendars` first. Calendar names are matched
 > case-insensitively, and the error message lists all available names if no match is found.
@@ -29,18 +22,23 @@ Exposes 7 calendar tools via MCP so Claude can manage your iCloud Calendar direc
 ## How it works
 
 ```
-Claude → /authorize → GitHub login (+ 2FA) → /auth/callback
-       → username verified → MCP access token issued → MCP connection
+AI assistant → /authorize → GitHub login (+ 2FA) → /auth/callback
+             → username verified → MCP access token issued → MCP connection
 ```
 
 Access is protected by **GitHub OAuth** — only the GitHub account set in
 `GITHUB_ALLOWED_USER` can authenticate. GitHub login with 2FA is required
-once every 30 days (tokens are persisted to Redis). No shared secrets are
-stored in Claude's config.
+once every 30 days; tokens are persisted to Redis. No credentials are stored
+in the AI assistant's configuration.
+
+1. The AI assistant detects the MCP server requires OAuth
+2. A browser window opens — you log in to GitHub with 2FA
+3. The server verifies your GitHub username matches `GITHUB_ALLOWED_USER`
+4. The AI assistant receives a 30-day access token and a 30-day refresh token
 
 > **Cold start note:** If the hosting platform sleeps the container, the first
 > request after wake-up takes a few seconds. OAuth tokens are persisted to
-> a Redis-compatible store so Claude does **not** need to re-authenticate.
+> a Redis-compatible store so the AI assistant does **not** need to re-authenticate.
 
 ## Deploy your own
 
@@ -80,13 +78,14 @@ Note the **Client ID** and generate a **Client Secret**.
 3. Set the environment variables listed below
 4. Trigger a deploy
 
-### Step 5 — Configure Claude
+### Step 5 — Connect to your AI assistant
 
-In Claude.ai web (connector dialog):
+In your MCP-compatible AI assistant, add this server as a remote MCP connection:
+
 - **URL:** `https://your-service-url/mcp`
-- OAuth fields: leave empty — the server advertises its own OAuth metadata
+- Authentication: leave empty — the server handles OAuth automatically
 
-Claude Desktop and mobile sync automatically from the web connector.
+**For Claude:** paste the URL into the connector dialog at [claude.ai](https://claude.ai). Claude Desktop and mobile sync automatically from the web connector.
 
 ## Configuration reference
 
