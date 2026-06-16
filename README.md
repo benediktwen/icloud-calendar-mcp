@@ -33,7 +33,7 @@ in the AI assistant's configuration.
 
 1. The AI assistant detects the MCP server requires OAuth
 2. A browser window opens — you log in to GitHub with 2FA
-3. The server verifies your GitHub username matches `GITHUB_ALLOWED_USER`
+3. The server verifies your GitHub account matches `GITHUB_ALLOWED_USER_ID`
 4. The AI assistant receives a 30-day access token and a 30-day refresh token
 
 > **Cold start note:** If the hosting platform sleeps the container, the first
@@ -95,7 +95,8 @@ In your MCP-compatible AI assistant, add this server as a remote MCP connection:
 | `ICLOUD_APP_PASSWORD` | ✅ | On reset | Apple app-specific password |
 | `GITHUB_CLIENT_ID` | ✅ | Never | GitHub OAuth App client ID |
 | `GITHUB_CLIENT_SECRET` | ✅ | Never | GitHub OAuth App client secret |
-| `GITHUB_ALLOWED_USER` | ✅ | Never | GitHub username allowed to connect |
+| `GITHUB_ALLOWED_USER_ID` | ✅ | Never | Immutable numeric GitHub user ID allowed to connect (preferred) |
+| `GITHUB_ALLOWED_USER` | — | Never | GitHub username — legacy fallback, used only if `GITHUB_ALLOWED_USER_ID` is unset |
 | `SERVER_URL` | ✅ | Never | Public base URL of this service |
 | `UPSTASH_REDIS_REST_URL` | ✅ | Never | Redis REST endpoint |
 | `UPSTASH_REDIS_REST_TOKEN` | ✅ | Never | Redis auth token |
@@ -118,7 +119,7 @@ The hosting platform may sleep the container after inactivity. The first request
 
 - **Transport:** Streamable HTTP (MCP 1.x) via FastMCP + uvicorn
 - **Auth:** GitHub OAuth 2.0 — server acts as Authorization Server, GitHub as Identity Provider
-- **User restriction:** GitHub username verified against `GITHUB_ALLOWED_USER` on every login
+- **User restriction:** GitHub user ID verified against `GITHUB_ALLOWED_USER_ID` on every login (immutable; `GITHUB_ALLOWED_USER` is a legacy username fallback)
 - **Token lifetime:** 30-day access token, 30-day refresh token (rotated on each refresh)
 - **Token persistence:** Redis-compatible store — tokens survive container restarts
 - **Calendar API:** Apple CalDAV at `caldav.icloud.com` using Apple ID + app-specific password
