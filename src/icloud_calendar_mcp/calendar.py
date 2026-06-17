@@ -2,6 +2,7 @@ import logging
 import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import caldav
@@ -35,6 +36,23 @@ def _to_utc(value: str) -> datetime:
 
 def _make_client(username: str, password: str) -> caldav.DAVClient:
     return caldav.DAVClient(url=ICLOUD_CALDAV_URL, username=username, password=password)
+
+
+def _event_by_uid(client: caldav.DAVClient, cal, event_uid: str):
+    """Fetch a calendar object by UID, resilient to iCloud CalDAV.
+
+    caldav's ``Calendar.event_by_uid`` issues a calendar-query REPORT that
+    iCloud frequently rejects with ``412 Precondition Failed``. Since caldav
+    saves objects at ``<calendar_url>/<uid>.ics``, on failure we address the
+    object directly (a plain GET), which iCloud serves without complaint.
+    """
+    try:
+        return cal.event_by_uid(event_uid)
+    except Exception:
+        url = cal.url.join(quote(event_uid) + ".ics")
+        event = caldav.Event(client=client, url=url, parent=cal)
+        event.load()
+        return event
 
 
 def _parse_dt(value) -> str:
@@ -170,7 +188,7 @@ def register_tools(mcp, username: str, password: str) -> None:
         if err:
             return {"error": err}
         try:
-            event = cal.event_by_uid(event_uid)
+            event = _event_by_uid(client, cal, event_uid)
             return _event_to_dict(event)
         except Exception as exc:
             return {"error": str(exc)}
@@ -246,7 +264,7 @@ def register_tools(mcp, username: str, password: str) -> None:
             return {"error": err}
 
         try:
-            event = cal.event_by_uid(event_uid)
+            event = _event_by_uid(client, cal, event_uid)
         except Exception as exc:
             return {"error": str(exc)}
 
@@ -290,7 +308,7 @@ def register_tools(mcp, username: str, password: str) -> None:
             return {"error": err}
 
         try:
-            event = cal.event_by_uid(event_uid)
+            event = _event_by_uid(client, cal, event_uid)
             event.delete()
             return {"status": "deleted", "uid": event_uid}
         except Exception as exc:
