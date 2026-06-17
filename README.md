@@ -19,6 +19,15 @@ Exposes 7 calendar tools so AI assistants can manage your iCloud Calendar direct
 > **Tip:** Always call `list_calendars` first. Calendar names are matched
 > case-insensitively, and the error message lists all available names if no match is found.
 
+### Timezone handling
+
+Event times are stored in and returned as **UTC**. On the write path
+(`create_event`, `update_event`), a naive datetime string (no offset, e.g.
+`2026-06-17T14:15:00`) is interpreted as **local wall-clock time** in
+`CALENDAR_TZ` (default `Europe/Berlin`) and converted to UTC — DST is handled
+automatically. A datetime with an explicit offset is honoured as given. Pass the
+local time you want to see in the calendar; do not pre-convert to UTC yourself.
+
 ## How it works
 
 ```

@@ -1,6 +1,8 @@
 import logging
+import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import caldav
 from icalendar import Calendar as iCal
@@ -9,6 +11,26 @@ from icalendar import Calendar, Event
 logger = logging.getLogger(__name__)
 
 ICLOUD_CALDAV_URL = "https://caldav.icloud.com"
+
+# Wall-clock timezone for naive datetime inputs on the write path.
+# iCloud stores/returns event times in UTC, but callers (e.g. the morning
+# briefing routine) pass local wall-clock times. Configurable via env.
+LOCAL_TZ = ZoneInfo(os.getenv("CALENDAR_TZ", "Europe/Berlin"))
+
+
+def _to_utc(value: str) -> datetime:
+    """Parse an ISO datetime string and return it as a UTC-aware datetime.
+
+    A naive string (no offset, e.g. ``2026-06-17T14:15:00``) is interpreted as
+    local wall-clock time in ``LOCAL_TZ`` and converted to UTC — handling the
+    CEST/CET (and any DST) offset automatically. A timezone-aware string is
+    honoured and converted to UTC. Storing UTC keeps the read path (which
+    returns UTC) and the write path symmetric.
+    """
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=LOCAL_TZ)
+    return dt.astimezone(timezone.utc)
 
 
 def _make_client(username: str, password: str) -> caldav.DAVClient:
@@ -168,8 +190,11 @@ def register_tools(mcp, username: str, password: str) -> None:
         Args:
             calendar_name: Calendar name (from list_calendars). Case-insensitive.
             title:         Event title/summary.
-            start:         ISO datetime string, e.g. '2026-05-20T10:00:00'.
-            end:           ISO datetime string, e.g. '2026-05-20T11:00:00'.
+            start:         ISO datetime string, e.g. '2026-05-20T10:00:00'. A
+                           naive value (no offset) is treated as local wall-clock
+                           time (CALENDAR_TZ, default Europe/Berlin); an explicit
+                           offset is honoured. Stored as UTC either way.
+            end:           ISO datetime string, same timezone rules as start.
             description:   Optional event description.
             location:      Optional location string.
         """
@@ -180,8 +205,8 @@ def register_tools(mcp, username: str, password: str) -> None:
             return {"error": err}
 
         uid      = str(uuid.uuid4())
-        start_dt = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
-        end_dt   = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+        start_dt = _to_utc(start)
+        end_dt   = _to_utc(end)
         ical_data = _build_ical(title, start_dt, end_dt, description, location, uid)
 
         try:
@@ -207,8 +232,10 @@ def register_tools(mcp, username: str, password: str) -> None:
             calendar_name: Calendar name (from list_calendars). Case-insensitive.
             event_uid:     UID of the event to update.
             title:         New title (optional).
-            start:         New start ISO datetime (optional).
-            end:           New end ISO datetime (optional).
+            start:         New start ISO datetime (optional). Naive values are
+                           treated as local wall-clock time (CALENDAR_TZ, default
+                           Europe/Berlin) and stored as UTC; see create_event.
+            end:           New end ISO datetime (optional). Same rules as start.
             description:   New description (optional).
             location:      New location (optional).
         """
@@ -227,9 +254,9 @@ def register_tools(mcp, username: str, password: str) -> None:
         if title is not None:
             vevent.summary.value = title
         if start is not None:
-            vevent.dtstart.value = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
+            vevent.dtstart.value = _to_utc(start)
         if end is not None:
-            vevent.dtend.value = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+            vevent.dtend.value = _to_utc(end)
         if description is not None:
             if hasattr(vevent, "description"):
                 vevent.description.value = description
