@@ -21,12 +21,16 @@ Exposes 7 calendar tools so AI assistants can manage your iCloud Calendar direct
 
 ### Timezone handling
 
-Event times are stored in and returned as **UTC**. On the write path
+Event times are stored with an explicit `TZID=<CALENDAR_TZ>` (default
+`Europe/Berlin`), not as a bare UTC `Z` timestamp — so calendar apps show
+*and edit* the event in that named zone instead of GMT/UTC. On the write path
 (`create_event`, `update_event`), a naive datetime string (no offset, e.g.
 `2026-06-17T14:15:00`) is interpreted as **local wall-clock time** in
-`CALENDAR_TZ` (default `Europe/Berlin`) and converted to UTC — DST is handled
-automatically. A datetime with an explicit offset is honoured as given. Pass the
-local time you want to see in the calendar; do not pre-convert to UTC yourself.
+`CALENDAR_TZ`; DST is handled automatically. A datetime with an explicit
+offset is honoured, then normalized to `CALENDAR_TZ`. Pass the local time you
+want to see in the calendar; do not pre-convert to UTC yourself. The read path
+(`list_events`, `get_event`, `search_events`) returns times with that same
+offset already applied — no further conversion needed on the caller's end.
 
 ## How it works
 
