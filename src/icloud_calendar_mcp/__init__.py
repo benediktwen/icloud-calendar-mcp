@@ -35,11 +35,15 @@ def _build_app() -> tuple[FastMCP, GitHubOAuthProvider]:
         github_client_id=github_client_id,
         github_client_secret=github_client_secret,
         server_url=SERVER_URL,
+        service_name="iCloud Calendar MCP",
     )
 
     auth_settings = AuthSettings(
         issuer_url=AnyHttpUrl(SERVER_URL),
         resource_server_url=AnyHttpUrl(SERVER_URL),
+        # Tokens are opaque strings issued by this process for this server only;
+        # the provider checks their audience itself (see load_access_token).
+        validate_token_resource=False,
         client_registration_options=ClientRegistrationOptions(
             enabled=True,
             valid_scopes=["mcp"],
@@ -59,6 +63,10 @@ def _build_app() -> tuple[FastMCP, GitHubOAuthProvider]:
     @mcp_app.custom_route("/auth/callback", methods=["GET"])
     async def github_callback(request: Request):
         return await oauth_provider.handle_github_callback(request)
+
+    @mcp_app.custom_route("/auth/consent", methods=["POST"])
+    async def oauth_consent(request: Request):
+        return await oauth_provider.handle_consent(request)
 
     @mcp_app.custom_route("/health", methods=["GET"])
     async def health(_request: Request) -> JSONResponse:
