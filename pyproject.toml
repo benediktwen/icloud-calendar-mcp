@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "MCP server for Apple iCloud Calendar via CalDAV"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp==1.29.0",  # pinned to deployed version; 2.x renames mcp.server.fastmcp
+    "mcp==1.30.0",  # pinned to deployed version; 2.x renames mcp.server.fastmcp
     "starlette>=1.0.1",
     "caldav==3.2.1",  # pinned to deployed version
     "icalendar==7.2.2",  # pinned to deployed version
