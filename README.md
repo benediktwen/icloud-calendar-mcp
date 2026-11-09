@@ -147,6 +147,10 @@ iCloud CalDAV does not support server-side expansion of recurring events. Events
 - **Token persistence:** `TOKEN_STORE_FILE` (atomic, 0600) or Upstash Redis — tokens survive container restarts
 - **Calendar API:** Apple CalDAV at `caldav.icloud.com` using Apple ID + app-specific password
 
+## Tests and deploy
+
+A push to `main` runs the test suite (`pip install -e ".[test]" && pytest -q`) on GitHub Actions; only if it passes does the workflow deploy to the server. Run the same command locally before pushing.
+
 ## Contributing
 
 This code was built with AI assistance ([Claude Code](https://claude.ai/code)) — vibe-coded with the best intentions. Security has been a priority throughout, but the code has not been independently audited. Use it at your own risk. If you spot a bug, a vulnerability, or an opportunity to improve anything, issues and pull requests are very welcome.
