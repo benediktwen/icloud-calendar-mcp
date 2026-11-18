@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:  # manual redeploy from the Actions tab
 
+permissions:
+  contents: read  # the jobs only read the repo; the deploy uses its own SSH key
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to server
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -29,4 +32,7 @@ jobs:
             cd /home/ubuntu/mcps/icloud-calendar-mcp
             git pull
             cd /home/ubuntu/mcps
+            # The container runs as the host user (UID 1001), no longer as root.
+            # Files the old root container wrote must belong to that user. Safe to repeat.
+            sudo chown -R 1001:1001 /home/ubuntu/mcp-state/calendar
             docker compose up -d --build icloud-calendar-mcp
